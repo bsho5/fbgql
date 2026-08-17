@@ -26,6 +26,7 @@ from .models import (
     Result,
     ScrapeJob,
 )
+from .runner import is_post_url
 from .scraper import Scraper
 
 __version__ = "0.1.0"
@@ -33,6 +34,7 @@ __version__ = "0.1.0"
 __all__ = [
     "Scraper",
     "ScrapeJob",
+    "is_post_url",
     "Account",
     "Profile",
     "Result",

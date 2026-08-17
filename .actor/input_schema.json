@@ -7,7 +7,7 @@
         "pageOrUrl": {
             "title": "Page, profile, group, or post URL",
             "type": "string",
-            "description": "Page/profile handle, group URL, or post URL. For a Page: scrapes N recent posts then each comment thread. For a post URL: that thread only. Private or login-gated targets will fail. If a handle returns 0 posts, try the numeric id or change residential proxy country (see README troubleshooting).",
+            "description": "Paste any Facebook link — a page, a profile (including profile.php?id=… and /people/… links), a group, or a single post — or just the handle. Profile tabs (/about, /photos) and tracking parameters are fine. For a Page: scrapes N recent posts then each comment thread. For a post URL: that thread only. Private or login-gated targets will fail. If a target returns 0 posts, change residential proxy country (see README troubleshooting).",
             "editor": "textfield",
             "prefill": "ronaldo",
             "example": "ronaldo"
@@ -24,7 +24,7 @@
         "profile": {
             "title": "Policy profile",
             "type": "string",
-            "description": "default = 3 workers + reply cap 1500 (best quality/time); tops_only = no replies; full_replies = always fetch replies (not recommended).",
+            "description": "default = 3 workers + reply cap 1500 (best quality/time); tops_only = no replies, so coverage drops on pages that reply to their commenters, and it is often slower because it serialises on one worker; full_replies = always fetch replies (not recommended).",
             "enum": [
                 "default",
                 "tops_only",
@@ -36,7 +36,7 @@
                 "Full replies"
             ],
             "default": "default",
-            "prefill": "tops_only",
+            "prefill": "default",
             "editor": "select"
         },
         "engine": {

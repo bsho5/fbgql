@@ -49,7 +49,21 @@ when you pass *no* account (or set `anonymous=True` explicitly).
 Login-gated, age-gated, and geo-restricted content and private groups/profiles stay
 unreachable anonymously — use authenticated mode for those. Public groups use a separate
 GraphQL feed query (`GroupsCometFeedRegularStoriesPaginationQuery`). If anonymous handle
-resolution fails for a profile, pass the numeric id or a post URL.
+resolution fails for a profile, try a residential proxy in a matching country or pass a
+post URL.
+
+## Target links
+
+`--page` / `ScrapeJob(page=…)` accepts a bare handle, a numeric id, or any link users
+actually paste — every Facebook host (`www.`, `m.`, `web.`, `mbasic.`, `fb.com`),
+`profile.php?id=…`, `/people/<slug>/<id>/`, a profile tab (`/ronaldo/about`), and
+tracking parameters. Extracting the id yourself is never required.
+
+Single posts go to `--post-url` / `post_url=…` and accept `/posts/<id>`, `/permalink/<id>`,
+`/reel/<id>`, `?story_fbid=<id>`, and opaque `pfbid…` share links — the last are resolved
+to the numeric post id from the permalink page, since the `feedback:<id>` query needs a
+numeric id. Callers with one input field (the Apify actor, a web form) can route with
+`fbgql.is_post_url(value)` instead of duplicating that logic.
 
 Measured, mechanism, and limits: [`reports/ANONYMOUS_ACCESS_SOLVED_2026-07-28.md`](reports/ANONYMOUS_ACCESS_SOLVED_2026-07-28.md).
 

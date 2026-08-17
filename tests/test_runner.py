@@ -60,6 +60,104 @@ def test_classify_target_group_url():
     assert runner._classify_target("mohamed.ayuop.5") == ("page", "mohamed.ayuop.5")
 
 
+@pytest.mark.parametrize("url", [
+    # The form Facebook serves for profiles with no vanity handle: the id is in the
+    # query string, so a path-only reading resolves the script name "profile.php".
+    "https://www.facebook.com/profile.php?id=61561308996622",
+    "https://m.facebook.com/profile.php?id=61561308996622",
+    "www.facebook.com/profile.php?id=61561308996622",
+    "https://www.facebook.com/profile.php?id=61561308996622&sk=about",
+    "https://www.facebook.com/profile.php?locale=en_GB&id=61561308996622",
+    # Same identity, other shapes Facebook links to.
+    "https://www.facebook.com/people/Jetour-South-Africa/61561308996622/",
+    "https://www.facebook.com/pages/Jetour/61561308996622",
+])
+def test_classify_target_extracts_numeric_id_from_url(url):
+    assert runner._classify_target(url) == ("page", "61561308996622")
+
+
+@pytest.mark.parametrize("url,handle", [
+    # A tab hanging off the profile must not be mistaken for the handle.
+    ("https://www.facebook.com/ronaldo/about", "ronaldo"),
+    ("https://www.facebook.com/ronaldo/photos", "ronaldo"),
+    ("https://www.facebook.com/ronaldo/", "ronaldo"),
+    ("https://web.facebook.com/ronaldo", "ronaldo"),
+    ("https://mbasic.facebook.com/ronaldo", "ronaldo"),
+    ("https://fb.com/ronaldo", "ronaldo"),
+    ("facebook.com/ronaldo", "ronaldo"),
+    ("https://www.facebook.com/ronaldo?mibextid=LQQJ4d", "ronaldo"),
+    ("https://www.facebook.com/pg/ronaldo/posts", "ronaldo"),
+    ("@ronaldo", "ronaldo"),
+])
+def test_classify_target_handles_url_variants(url, handle):
+    assert runner._classify_target(url) == ("page", handle)
+
+
+def test_classify_target_group_url_variants():
+    assert runner._classify_target(
+        "https://m.facebook.com/groups/2693577247594660/?sorting_setting=CHRONOLOGICAL"
+    ) == ("group", "2693577247594660")
+    assert runner._classify_target(
+        "https://www.facebook.com/groups/?id=2693577247594660"
+    ) == ("group", "2693577247594660")
+
+
+def test_profile_php_url_needs_no_html_fetch():
+    """The id is in the URL, so resolution must not hit the network at all."""
+    fake = _FakeGet("should not be fetched")
+    cands = runner._resolve_page_id_candidates(
+        "https://www.facebook.com/profile.php?id=61561308996622", _SESSION, fake
+    )
+    assert cands == ["61561308996622"]
+    assert fake.urls == []
+
+
+def test_post_id_from_shared_permalink_is_the_post_not_the_profile():
+    """``?story_fbid=pfbid…&id=<profile id>`` is the shape Facebook's share sheet emits.
+
+    A bare-digit fallback matched too early grabs the trailing profile id and the run
+    then scrapes an unrelated feedback target — silently, with 0 comments.
+    """
+    url = ("https://www.facebook.com/permalink.php?story_fbid=pfbid02bmcvB5TVUt"
+           "caagWK1cevGJ3d3KxDoM5As&id=61561308996622")
+    assert runner._post_id_from_url(url) == "pfbid02bmcvB5TVUtcaagWK1cevGJ3d3KxDoM5As"
+
+
+@pytest.mark.parametrize("url,post_id", [
+    ("https://www.facebook.com/ronaldo/posts/122216361518376966", "122216361518376966"),
+    ("https://www.facebook.com/permalink.php?story_fbid=122216361518376966&id=615613089",
+     "122216361518376966"),
+    ("https://www.facebook.com/reel/1655075679339828/", "1655075679339828"),
+    ("https://www.facebook.com/ronaldo/videos/1234567890", "1234567890"),
+    ("https://www.facebook.com/photo/?fbid=122216361518376966&set=a.1", "122216361518376966"),
+])
+def test_post_id_from_numeric_urls(url, post_id):
+    assert runner._post_id_from_url(url) == post_id
+
+
+def test_resolve_opaque_post_id_from_permalink_html():
+    html = '{"top_level_post_id":"122217064718376966","post_id":"122217064718376966"}'
+    fake = _FakeGet(html)
+    url = "https://www.facebook.com/permalink.php?story_fbid=pfbid0xyz&id=615613089"
+    assert runner._resolve_opaque_post_id(url, _SESSION, fake) == "122217064718376966"
+    assert fake.urls == [url]  # the full URL, query intact — it identifies the post
+
+
+def test_resolve_opaque_post_id_raises_with_actionable_message():
+    with pytest.raises(ValueError, match="numeric permalink"):
+        runner._resolve_opaque_post_id(
+            "https://www.facebook.com/share/p/1AbCdEf/", _SESSION, _FakeGet("login wall")
+        )
+
+
+def test_candidate_html_urls_keep_id_query():
+    """A non-numeric ``?id=`` still needs the query kept, or the URL identifies nobody."""
+    urls = runner._candidate_html_urls(
+        "https://www.facebook.com/profile.php?id=pfbid0xyz", "page", "pfbid0xyz"
+    )
+    assert urls[0] == "https://www.facebook.com/profile.php?id=pfbid0xyz"
+
+
 def test_resolve_group_candidates_from_group_html():
     html = '"groupID":"2693577247594660","name":"Test Group"'
     fake = _FakeGet(html)

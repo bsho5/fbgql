@@ -20,8 +20,16 @@ from .transport.sync_http import SyncTransport
 
 _NUMERIC = re.compile(r"^\d+$")
 _GROUP_URL = re.compile(
-    r"(?:https?://)?(?:www\.)?facebook\.com/groups/([^/?#]+)", re.IGNORECASE
+    r"(?:https?://)?(?:[\w-]+\.)*facebook\.com/groups/([^/?#]+)", re.IGNORECASE
 )
+_SCHEME = re.compile(r"^[a-z][\w+.-]*://", re.IGNORECASE)
+# Any Facebook host: www., m., web., mbasic., free., business., or a bare fb.com.
+_FB_HOST = re.compile(r"^(?:[\w-]+\.)*(?:facebook|fb)\.com(?::\d+)?$", re.IGNORECASE)
+# ``profile.php?id=…`` and ``/groups/?id=…`` keep the id in the query string.
+_ID_QUERY = re.compile(r"[?&]id=([^&#/]+)", re.IGNORECASE)
+# URL shapes whose id sits in a trailing segment, not the first one:
+# /people/<slug>/<id>, /pages/<slug>/<id>, /pages/category/<cat>/<slug>/<id>.
+_ID_IN_TAIL = {"people", "pages", "profile"}
 # Page-id candidate patterns, best-first. The timeline feed query keys on the *feed
 # owner / profile* id (e.g. 100064… for a Page), NOT the classic page id (e.g. 1938…
 # from delegate_page) — the latter returns an empty ``Page`` node. Facebook serves
@@ -39,13 +47,44 @@ _PAGE_ID_PATTERNS = [
     re.compile(r'"page_id"\s*:\s*"?(\d+)"?'),
     re.compile(r'"entity_id"\s*:\s*"(\d+)"'),
 ]
+# Does a pasted link point at ONE post? Each pattern requires the id itself, not just
+# the marker: a page's video *tab* (``/ronaldo/videos/``) is a feed, while
+# ``/ronaldo/videos/1234`` is a single post.
+_POST_URL_PATTERNS = [
+    re.compile(r'/posts/[\w-]+', re.IGNORECASE),
+    re.compile(r'/permalink/\d+', re.IGNORECASE),
+    re.compile(r'/videos/(?:\d+|pfbid[\w-]+)', re.IGNORECASE),
+    re.compile(r'/reel/\d+', re.IGNORECASE),
+    re.compile(r'[?&]story_fbid=', re.IGNORECASE),
+    re.compile(r'/pfbid[\w-]+', re.IGNORECASE),
+    # Share sheet links (``/share/p/<code>``) carry no id — they redirect to the
+    # permalink, so the HTML resolver below picks the post id up from there.
+    re.compile(r'/share/(?:p|v|r)/', re.IGNORECASE),
+]
+_PROFILE_URL_PATTERNS = [
+    re.compile(r'/profile\.php', re.IGNORECASE),
+    re.compile(r'/people/', re.IGNORECASE),
+]
+# Numeric post id inside a permalink page's HTML, for resolving opaque pfbid links.
+_OPAQUE_POST_ID_PATTERNS = [
+    re.compile(r'"post_id"\s*:\s*"(\d+)"'),
+    re.compile(r'"top_level_post_id"\s*:\s*"(\d+)"'),
+    re.compile(r'"story_fbid"\s*:\s*\["?(\d+)'),
+]
+# Ordered: every specific shape first, then opaque pfbid ids, and only then the
+# bare-digit-run fallback. The fallback MUST stay last — a shared permalink looks like
+# ``permalink.php?story_fbid=pfbid…&id=<profile id>``, so a digit run reached too early
+# picks up the profile id and silently scrapes the wrong feedback target.
 _POST_ID_PATTERNS = [
     re.compile(r'/posts/(\d+)'),
-    re.compile(r'story_fbid=(\d+)'),
+    re.compile(r'story_fbid=(\d+)(?!\w)'),
     re.compile(r'/permalink/(\d+)'),
     re.compile(r'/videos/(\d+)'),
-    re.compile(r'(\d{6,})'),
+    re.compile(r'/reel/(\d+)'),
+    re.compile(r'[?&]fbid=(\d+)'),          # /photo/?fbid=… — photo posts
+    re.compile(r'story_fbid=(pfbid\w+)'),
     re.compile(r'(pfbid\w+)'),  # opaque id — base64 feedback trick may not apply
+    re.compile(r'(\d{6,})'),
 ]
 
 
@@ -66,23 +105,58 @@ class ExecutionPlan:
     meta: dict = field(default_factory=dict)
 
 
+def _path_parts(page: str) -> list[str]:
+    """Path segments of a target, with scheme, host, query, and fragment removed.
+
+    Accepts bare handles and every Facebook URL flavour users paste — with or without
+    a scheme, on any Facebook host (``m.``, ``web.``, ``mbasic.``, ``fb.com``).
+    """
+    raw = _SCHEME.sub("", page.split("#")[0]).split("?")[0]
+    parts = [p for p in raw.split("/") if p]
+    if parts and _FB_HOST.match(parts[0]):
+        parts = parts[1:]
+    return parts
+
+
 def _classify_target(page: str) -> tuple[str, str]:
     """Return ``(kind, handle_or_id)`` where kind is ``group`` or ``page``.
 
     ``page`` covers Facebook Pages and user profiles (same timeline query).
+
+    Users paste links rather than handles, so every URL shape Facebook itself serves
+    has to land on the right identifier here — this is the single funnel for it.
     """
     page = (page or "").strip()
     m = _GROUP_URL.search(page)
     if m:
         return "group", m.group(1)
-    # Bare path fragments like "groups/123" from some callers.
-    parts = [p for p in page.replace("https://", "").replace("http://", "").split("/") if p]
+    parts = _path_parts(page)
     if "groups" in parts:
         idx = parts.index("groups")
+        # ``/groups/?id=<gid>`` puts the id in the query instead of the path.
         if idx + 1 < len(parts):
-            return "group", parts[idx + 1].split("?")[0]
-    handle = page.rstrip("/").split("/")[-1].split("?")[0]
-    return "page", handle
+            return "group", parts[idx + 1]
+        q = _ID_QUERY.search(page)
+        if q:
+            return "group", q.group(1)
+    # ``profile.php?id=…`` — what Facebook serves for profiles with no vanity handle,
+    # so it is the most-pasted form. The id is in the query; the path is a script name.
+    if parts and parts[0].lower() == "profile.php":
+        q = _ID_QUERY.search(page)
+        if q:
+            return "page", q.group(1)
+    # ``/people/<slug>/<id>`` and ``/pages/<slug>/<id>`` carry a numeric id in the tail.
+    if parts and parts[0].lower() in _ID_IN_TAIL:
+        for seg in reversed(parts[1:]):
+            if _NUMERIC.match(seg):
+                return "page", seg
+    # Legacy ``/pg/<handle>/posts`` prefix.
+    if len(parts) > 1 and parts[0].lower() == "pg":
+        parts = parts[1:]
+    # Otherwise the FIRST path segment is the handle. Taking the last would pick up
+    # profile tabs — ``/JetourSA/about``, ``/JetourSA/photos`` — as the handle.
+    handle = parts[0] if parts else page
+    return "page", handle.lstrip("@")
 
 
 def _candidate_html_urls(page: str, kind: str, handle: str) -> list[str]:
@@ -93,9 +167,13 @@ def _candidate_html_urls(page: str, kind: str, handle: str) -> list[str]:
             f"https://www.facebook.com/{handle}",
         ]
     urls = [f"https://www.facebook.com/{handle}", f"https://www.facebook.com/{handle}/about"]
-    # If the caller passed a full non-group URL, try it first (vanity / profile.php).
-    if page.startswith("http") and page.rstrip("/") not in urls:
-        urls.insert(0, page.split("?")[0])
+    # If the caller passed a full non-group URL, try it first (vanity / profile.php /
+    # share redirect). Keep the query string when it carries an ``id=`` — stripping it
+    # off a ``profile.php?id=…`` URL leaves a bare script name that identifies nobody.
+    if page.startswith("http"):
+        original = page if _ID_QUERY.search(page) else page.split("?")[0]
+        if original.rstrip("/") not in [u.rstrip("/") for u in urls]:
+            urls.insert(0, original)
     return urls
 
 
@@ -125,9 +203,9 @@ def _resolve_page_id_candidates(page: str, session: Session,
             break
     if not candidates:
         raise ValueError(
-            f"Could not resolve numeric id for {page!r}. "
+            f"Could not resolve numeric id for {page!r} (read as {kind} {handle!r}). "
             "The target may be private or login-gated from this IP — try a residential "
-            "proxy in a matching country, pass the numeric id, or a full post URL."
+            "proxy in a matching country, or pass a full post URL."
         )
     return candidates
 
@@ -143,6 +221,47 @@ def _post_id_from_url(url: str) -> str:
         if m:
             return m.group(1)
     raise ValueError(f"Could not extract post id from {url!r}")
+
+
+def _resolve_opaque_post_id(url: str, session: Session, transport: SyncTransport) -> str:
+    """Turn a ``pfbid…`` share link into the numeric post id the comment query needs.
+
+    Share/copy-link URLs carry an opaque ``pfbid`` story id, and the base64
+    ``feedback:<id>`` trick only works on numeric ids — so the permalink HTML is the
+    only way in. Users paste these constantly, so failing here means failing on the
+    most common link shape Facebook hands out.
+    """
+    from .auth import BROWSER_HEADERS
+
+    html = transport.get(url, cookies=session.cookies, proxy=session.proxy,
+                         headers=BROWSER_HEADERS)
+    for pat in _OPAQUE_POST_ID_PATTERNS:
+        m = pat.search(html)
+        if m:
+            return m.group(1)
+    raise ValueError(
+        f"Could not resolve a numeric post id for {url!r}. Opaque 'pfbid' links need "
+        "their permalink page to load — the post may be private or login-gated from "
+        "this IP (try a residential proxy), or open the post on Facebook and use the "
+        "numeric permalink (…/posts/<digits> or ?story_fbid=<digits>)."
+    )
+
+
+def is_post_url(value: str) -> bool:
+    """True when a pasted link points at ONE post rather than a feed to paginate.
+
+    Callers with a single input field (the Apify actor, any web form) need this to
+    choose between ``ScrapeJob(page=…)`` and ``ScrapeJob(post_url=…)``. It lives here
+    so URL semantics stay in one place alongside ``_classify_target``.
+    """
+    value = (value or "").strip()
+    if not value.startswith("http"):
+        return False
+    # A profile URL can itself contain a pfbid (``/people/<slug>/pfbid…``) — that is a
+    # profile whose feed we walk, not a post.
+    if any(p.search(value) for p in _PROFILE_URL_PATTERNS):
+        return False
+    return any(p.search(value) for p in _POST_URL_PATTERNS)
 
 
 def _usable_posts(posts: list[Post]) -> list[Post]:
@@ -418,7 +537,14 @@ def prepare(job: ScrapeJob) -> ExecutionPlan:
 
     if job.post_url:
         emit(job, f"Single-post mode: {job.post_url}")
-        post_id = _post_id_from_url(job.post_url)
+        try:
+            post_id = _post_id_from_url(job.post_url)
+        except ValueError:
+            post_id = ""  # e.g. a /share/p/<code> link carries no id at all
+        if not _NUMERIC.match(post_id):
+            emit(job, f"Opaque post id {post_id[:16]}… — resolving numeric id from HTML…")
+            post_id = _resolve_opaque_post_id(job.post_url, primary, transport)
+            emit(job, f"Resolved post id: {post_id}")
         posts = [Post(post_id=post_id, feedback_id=feedback_id_for_post(post_id),
                       text="", permalink=job.post_url, comment_count=0, page_name=page_name)]
         resolved_id = None

@@ -36,3 +36,7 @@ captured_queries.json
 # local reports
 reports/
 
+# Local agent config — machine-specific permissions, not shared project settings
+.claude/settings.json
+.claude/settings.local.json
+

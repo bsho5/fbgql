@@ -29,12 +29,16 @@ usage.**
 
 ## Supported targets
 
+Paste the link straight from your browser or Facebook's share sheet — no editing needed.
+Any Facebook host (`www.`, `m.`, `web.`, `mbasic.`, `fb.com`), a profile tab (`/about`,
+`/photos`), and tracking parameters (`?mibextid=…`) are all handled, as is a bare handle.
+
 | Target | Example `pageOrUrl` | Notes |
 |--------|---------------------|-------|
 | **Page** | `ronaldo`, `https://www.facebook.com/ronaldo` | Public Page timeline |
-| **Profile** | `mohamed.ayuop.5` or numeric id `100003173681397` | Only if the profile is visible logged out; some handles need the numeric id |
+| **Profile** | `mohamed.ayuop.5`, `https://www.facebook.com/profile.php?id=61561308996622`, `https://www.facebook.com/people/Some-Name/61561308996622/`, or a bare numeric id | Only if the profile is visible logged out |
 | **Group** | `https://www.facebook.com/groups/2693577247594660` | Public groups only |
-| **Post** | `https://www.facebook.com/.../posts/...` or `/permalink/...` | Scrapes that thread only (`maxPosts` / date filter ignored) |
+| **Post** | `https://www.facebook.com/.../posts/...`, `/permalink/...`, `/reel/...`, `?story_fbid=...`, or a `pfbid…` share link | Scrapes that thread only (`maxPosts` / date filter ignored). Opaque `pfbid` links are resolved to the post via its permalink page |
 
 ## Sample output
 
@@ -255,7 +259,7 @@ Because the Actor is logged out, it sees exactly what any anonymous visitor sees
 |---------|--------------|-------------|
 | **0 posts** / run fails with “No posts found” | Proxy IP/country blocked or empty feed from that exit | In **Proxy**, set **Apify Proxy country** to the audience’s country (or yours). Retry another country. Keep **RESIDENTIAL** on. |
 | Works locally, fails on Apify | Different IP path (home vs residential exit) | Same as above — match proxy country; do not turn proxy off on the platform long-term |
-| `Could not resolve numeric id` | Handle is login-gated anonymously | Pass the **numeric profile/group id**, or a direct **post URL**; or use the [`fbgql` CLI](https://github.com/bsho5/fbgql) with cookies locally |
+| `Could not resolve numeric id` | Target is login-gated from this IP (URL shapes themselves are handled — see Supported targets) | Switch **proxy country**, or pass a direct **post URL**; or use the [`fbgql` CLI](https://github.com/bsho5/fbgql) with cookies locally |
 | Login wall / `SessionInvalid` | Target private, or IP flagged | Rotate residential proxy / country; confirm the target is public in a private browser window |
 | Fewer comments than Facebook shows | Deleted/hidden/nested comments, or `maxComments` cap | Normal — check per-post `coverage`; raise or clear `maxComments` if you capped |
 | Date filter needs `afterDate` | Only `beforeDate` was set | Always set **Posts on or after** when using a date window |

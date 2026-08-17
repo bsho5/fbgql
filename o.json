@@ -1,0 +1,461 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Facebook Page Posts & Comments Scraper",
+    "description": "Free Facebook page posts & comments scraper. Paste a Page URL or handle — scrapes N recent posts and their comments/replies as JSON. Also public groups, profiles, and single post URLs. No login. $0 developer fee; only Apify platform usage.",
+    "version": "0.0",
+    "x-build-id": "qglBoeSyPVVKz4LtL"
+  },
+  "servers": [
+    {
+      "url": "https://api.apify.com/v2"
+    }
+  ],
+  "paths": {
+    "/acts/bsho5~facebook-page-posts-comments-scraper/run-sync-get-dataset-items": {
+      "post": {
+        "operationId": "run-sync-get-dataset-items-bsho5-facebook-page-posts-comments-scraper",
+        "x-openai-isConsequential": false,
+        "summary": "Executes an Actor, waits for its completion, and returns Actor's dataset items in response.",
+        "tags": [
+          "Run Actor"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inputSchema"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Enter your Apify token here"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/acts/bsho5~facebook-page-posts-comments-scraper/runs": {
+      "post": {
+        "operationId": "runs-sync-bsho5-facebook-page-posts-comments-scraper",
+        "x-openai-isConsequential": false,
+        "summary": "Executes an Actor and returns information about the initiated run in response.",
+        "tags": [
+          "Run Actor"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inputSchema"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Enter your Apify token here"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/runsResponseSchema"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/acts/bsho5~facebook-page-posts-comments-scraper/run-sync": {
+      "post": {
+        "operationId": "run-sync-bsho5-facebook-page-posts-comments-scraper",
+        "x-openai-isConsequential": false,
+        "summary": "Executes an Actor, waits for completion, and returns the OUTPUT from Key-value store in response.",
+        "tags": [
+          "Run Actor"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/inputSchema"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Enter your Apify token here"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "pageOrUrl"
+        ],
+        "properties": {
+          "pageOrUrl": {
+            "title": "Page, profile, group, or post URL",
+            "type": "string",
+            "description": "Page/profile handle, group URL, or post URL. For a Page: scrapes N recent posts then each comment thread. For a post URL: that thread only. Private or login-gated targets will fail. If a handle returns 0 posts, try the numeric id or change residential proxy country (see README troubleshooting)."
+          },
+          "maxPosts": {
+            "title": "Max recent posts from page feed",
+            "minimum": 1,
+            "maximum": 200,
+            "type": "integer",
+            "description": "How many recent feed posts to scrape (with comments). Ignored when afterDate/beforeDate is set — then the Actor walks the feed until the date window ends. Ignored for a single post URL. Each post's comments are paginated in full, so runtime and proxy cost scale with how many comments the posts have — raise this once you have seen what one post costs on your target.",
+            "default": 1
+          },
+          "profile": {
+            "title": "Policy profile",
+            "enum": [
+              "default",
+              "tops_only",
+              "full_replies"
+            ],
+            "type": "string",
+            "description": "default = 3 workers + reply cap 1500 (best quality/time); tops_only = no replies; full_replies = always fetch replies (not recommended).",
+            "default": "default"
+          },
+          "engine": {
+            "title": "Engine",
+            "enum": [
+              "async",
+              "threads"
+            ],
+            "type": "string",
+            "description": "async = streaming httpx (recommended on Apify); threads = requests thread pool.",
+            "default": "async"
+          },
+          "proxyConfiguration": {
+            "title": "Proxy",
+            "type": "object",
+            "description": "Apify residential proxy (on by default). Main reliability lever. If runs return 0 posts for a public target, set proxy country to match the audience (or your country) and retry — wrong exits often get empty feeds.",
+            "default": {
+              "useApifyProxy": true,
+              "apifyProxyGroups": [
+                "RESIDENTIAL"
+              ]
+            }
+          },
+          "afterDate": {
+            "title": "Posts on or after",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+            "type": "string",
+            "description": "Calendar date. Keep posts from this day onward (inclusive), using midnight in dateTimezone. Leave empty for no lower bound. Example: pick 2026-07-31 and set \"Posts before\" to 2026-08-01 for that local day only."
+          },
+          "beforeDate": {
+            "title": "Posts before",
+            "pattern": "^(\\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+            "type": "string",
+            "description": "Calendar date. Keep posts strictly before this day (exclusive), using midnight in dateTimezone. Leave empty for no upper bound. When using a date filter, afterDate is required so pagination knows when to stop."
+          },
+          "dateTimezone": {
+            "title": "Date timezone",
+            "type": "string",
+            "description": "Timezone for afterDate/beforeDate midnight. Use UTC (default), an offset like +3 or +03:00, or an IANA name (Africa/Khartoum, Asia/Riyadh). Unix afterTime/beforeTime ignore this.",
+            "default": "UTC"
+          },
+          "postsOnly": {
+            "title": "Posts only",
+            "type": "boolean",
+            "description": "Discover posts (with created_time) and skip comment/reply scraping. nested_replies_on will be false.",
+            "default": false
+          },
+          "workers": {
+            "title": "Workers (advanced)",
+            "minimum": 1,
+            "maximum": 8,
+            "type": "integer",
+            "description": "Override the worker count from the profile."
+          },
+          "replyFbCap": {
+            "title": "Reply cap (advanced)",
+            "type": "integer",
+            "description": "Fetch replies only when a post's FB comment_count is below this. 0 = tops only."
+          },
+          "maxComments": {
+            "title": "Max comments per post",
+            "minimum": 0,
+            "type": "integer",
+            "description": "Stop paginating top-level comments after this many per post. Heavy threads are truncated instead of skipped. Leave empty for no limit."
+          },
+          "minIntervalSec": {
+            "title": "Min interval seconds (advanced)",
+            "type": "number",
+            "description": "Pause between comment pages, per worker. Higher = gentler on rate limits.",
+            "default": 1
+          },
+          "megaThreshold": {
+            "title": "Mega threshold (advanced)",
+            "type": "integer",
+            "description": "If set, pin the single heaviest post to a dedicated worker."
+          }
+        }
+      },
+      "runsResponseSchema": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "actId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "startedAt": {
+                "type": "string",
+                "format": "date-time",
+                "example": "2025-01-08T00:00:00.000Z"
+              },
+              "finishedAt": {
+                "type": "string",
+                "format": "date-time",
+                "example": "2025-01-08T00:00:00.000Z"
+              },
+              "status": {
+                "type": "string",
+                "example": "READY"
+              },
+              "meta": {
+                "type": "object",
+                "properties": {
+                  "origin": {
+                    "type": "string",
+                    "example": "API"
+                  },
+                  "userAgent": {
+                    "type": "string"
+                  }
+                }
+              },
+              "stats": {
+                "type": "object",
+                "properties": {
+                  "inputBodyLen": {
+                    "type": "integer",
+                    "example": 2000
+                  },
+                  "rebootCount": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "restartCount": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "resurrectCount": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "computeUnits": {
+                    "type": "integer",
+                    "example": 0
+                  }
+                }
+              },
+              "options": {
+                "type": "object",
+                "properties": {
+                  "build": {
+                    "type": "string",
+                    "example": "latest"
+                  },
+                  "timeoutSecs": {
+                    "type": "integer",
+                    "example": 300
+                  },
+                  "memoryMbytes": {
+                    "type": "integer",
+                    "example": 1024
+                  },
+                  "diskMbytes": {
+                    "type": "integer",
+                    "example": 2048
+                  }
+                }
+              },
+              "buildId": {
+                "type": "string"
+              },
+              "defaultKeyValueStoreId": {
+                "type": "string"
+              },
+              "defaultDatasetId": {
+                "type": "string"
+              },
+              "defaultRequestQueueId": {
+                "type": "string"
+              },
+              "buildNumber": {
+                "type": "string",
+                "example": "1.0.0"
+              },
+              "containerUrl": {
+                "type": "string"
+              },
+              "usage": {
+                "type": "object",
+                "properties": {
+                  "ACTOR_COMPUTE_UNITS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "DATASET_READS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "DATASET_WRITES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "KEY_VALUE_STORE_READS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "KEY_VALUE_STORE_WRITES": {
+                    "type": "integer",
+                    "example": 1
+                  },
+                  "KEY_VALUE_STORE_LISTS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "REQUEST_QUEUE_READS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "REQUEST_QUEUE_WRITES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "DATA_TRANSFER_INTERNAL_GBYTES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "DATA_TRANSFER_EXTERNAL_GBYTES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "PROXY_RESIDENTIAL_TRANSFER_GBYTES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "PROXY_SERPS": {
+                    "type": "integer",
+                    "example": 0
+                  }
+                }
+              },
+              "usageTotalUsd": {
+                "type": "number",
+                "example": 0.00005
+              },
+              "usageUsd": {
+                "type": "object",
+                "properties": {
+                  "ACTOR_COMPUTE_UNITS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "DATASET_READS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "DATASET_WRITES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "KEY_VALUE_STORE_READS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "KEY_VALUE_STORE_WRITES": {
+                    "type": "number",
+                    "example": 0.00005
+                  },
+                  "KEY_VALUE_STORE_LISTS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "REQUEST_QUEUE_READS": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "REQUEST_QUEUE_WRITES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "DATA_TRANSFER_INTERNAL_GBYTES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "DATA_TRANSFER_EXTERNAL_GBYTES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "PROXY_RESIDENTIAL_TRANSFER_GBYTES": {
+                    "type": "integer",
+                    "example": 0
+                  },
+                  "PROXY_SERPS": {
+                    "type": "integer",
+                    "example": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

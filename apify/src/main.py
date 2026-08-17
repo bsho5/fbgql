@@ -9,15 +9,10 @@ from __future__ import annotations
 
 from apify import Actor
 
-from fbgql import Account, Profile, ScrapeJob, Scraper, SessionInvalid
+# ``is_post_url`` — page vs. single post is decided by the core, so this actor and any
+# other wrapper read a pasted link the same way.
+from fbgql import Account, Profile, ScrapeJob, Scraper, SessionInvalid, is_post_url
 from fbgql.dates import parse_time_bound
-
-# Heuristic: treat inputs that look like a permalink as a single-post job.
-_POST_MARKERS = ("/posts/", "story_fbid", "/permalink/", "/videos/", "pfbid")
-
-
-def _is_post_url(value: str) -> bool:
-    return value.startswith("http") and any(m in value for m in _POST_MARKERS)
 
 
 async def main() -> None:
@@ -49,7 +44,7 @@ async def main() -> None:
                 )
 
         account = Account.anonymous_account(proxy=proxy_url)
-        is_post = _is_post_url(page_or_url)
+        is_post = is_post_url(page_or_url)
 
         # Prefer calendar fields (afterDate/beforeDate). Fall back to legacy unix
         # afterTime/beforeTime so older API callers keep working. Calendar dates are
