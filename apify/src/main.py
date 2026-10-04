@@ -15,6 +15,19 @@ from fbgql import Account, Profile, ScrapeJob, Scraper, SessionInvalid, is_post_
 from fbgql.dates import parse_time_bound
 
 
+async def _finish_unreachable(target: str, reason: str) -> None:
+    """End the run as SUCCEEDED with an explanatory row instead of failing it.
+
+    A private, login-gated, or IP-blocked target is a property of the input, not an
+    actor bug — failing the run would count against the actor's Store quality score
+    for every private link a user pastes. The row lands in the dataset's ``error``
+    column so the user (and API/integration callers) still see why nothing came back.
+    """
+    Actor.log.warning(reason)
+    await Actor.push_data({"post": {"url": target}, "error": reason})
+    await Actor.set_status_message(reason, is_terminal=True)
+
+
 async def main() -> None:
     async with Actor:
         inp = await Actor.get_input() or {}
@@ -104,26 +117,25 @@ async def main() -> None:
         except SessionInvalid as exc:
             # No credentials are involved, so this means Facebook served a login wall —
             # typically a blocked/flagged IP or a target that isn't publicly visible.
-            await Actor.fail(
-                status_message=(
-                    "Facebook served a login wall for this target — it may be private, "
-                    f"or this IP is blocked (try a residential proxy). ({exc})"
-                )
+            await _finish_unreachable(
+                page_or_url,
+                "Facebook served a login wall for this target — it may be private, "
+                f"or this IP is blocked (try a residential proxy). ({exc})",
             )
             return
         except ValueError as exc:
-            await Actor.fail(status_message=str(exc))
+            # Raised when the id/post can't be resolved — private or gated targets.
+            await _finish_unreachable(page_or_url, str(exc))
             return
 
         if scraped == 0 and not is_post:
-            await Actor.fail(
-                status_message=(
-                    f"No posts found for {page_or_url!r}. Common causes: (1) residential "
-                    "proxy country/IP blocked by Facebook — switch Apify proxy country to "
-                    "match the audience (or try another country); (2) private / "
-                    "login-gated profile or group; (3) pass the numeric id or a direct "
-                    "post URL. See the Actor README troubleshooting section."
-                )
+            await _finish_unreachable(
+                page_or_url,
+                f"No posts found for {page_or_url!r}. Common causes: (1) residential "
+                "proxy country/IP blocked by Facebook — switch Apify proxy country to "
+                "match the audience (or try another country); (2) private / "
+                "login-gated profile or group; (3) pass the numeric id or a direct "
+                "post URL. See the Actor README troubleshooting section.",
             )
             return
 

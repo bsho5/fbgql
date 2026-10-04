@@ -7,7 +7,7 @@
         "pageOrUrl": {
             "title": "Page, profile, group, or post URL",
             "type": "string",
-            "description": "Paste any Facebook link — a page, a profile (including profile.php?id=… and /people/… links), a group, or a single post — or just the handle. Profile tabs (/about, /photos) and tracking parameters are fine. For a Page: scrapes N recent posts then each comment thread. For a post URL: that thread only. Private or login-gated targets will fail. If a target returns 0 posts, change residential proxy country (see README troubleshooting).",
+            "description": "Paste any Facebook link — a page, a profile (including profile.php?id=… and /people/… links), a group, or a single post — or just the handle. Profile tabs (/about, /photos) and tracking parameters are fine. For a Page: scrapes N recent posts then each comment thread. For a post URL: that thread only. Private or login-gated targets cannot be scraped — the run finishes with a single row explaining why instead of posts. If a target returns 0 posts, change residential proxy country (see README troubleshooting).",
             "editor": "textfield",
             "prefill": "ronaldo",
             "example": "ronaldo"

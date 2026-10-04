@@ -257,7 +257,7 @@ Because the Actor is logged out, it sees exactly what any anonymous visitor sees
 
 | Symptom | Likely cause | What to try |
 |---------|--------------|-------------|
-| **0 posts** / run fails with “No posts found” | Proxy IP/country blocked or empty feed from that exit | In **Proxy**, set **Apify Proxy country** to the audience’s country (or yours). Retry another country. Keep **RESIDENTIAL** on. |
+| **0 posts** / one `error` row saying “No posts found” | Proxy IP/country blocked or empty feed from that exit | In **Proxy**, set **Apify Proxy country** to the audience’s country (or yours). Retry another country. Keep **RESIDENTIAL** on. |
 | Works locally, fails on Apify | Different IP path (home vs residential exit) | Same as above — match proxy country; do not turn proxy off on the platform long-term |
 | `Could not resolve numeric id` | Target is login-gated from this IP (URL shapes themselves are handled — see Supported targets) | Switch **proxy country**, or pass a direct **post URL**; or use the [`fbgql` CLI](https://github.com/bsho5/fbgql) with cookies locally |
 | Login wall / `SessionInvalid` | Target private, or IP flagged | Rotate residential proxy / country; confirm the target is public in a private browser window |
@@ -324,9 +324,11 @@ filter.
 Facebook's count includes deleted/hidden/deeply nested comments the API won't return.
 Also check whether you set `maxComments`.
 
-**Why did a run fail with a login wall or “No posts found”?**
-The target isn't publicly visible from that IP, or the proxy country is a bad fit. Change
-the residential proxy country and retry — see [Troubleshooting](#troubleshooting).
+**Why did my run return a single row with an `error` instead of posts?**
+The target isn't publicly visible from that IP (private / login-gated profile or group),
+or the proxy country is a bad fit. The run still succeeds so the reason stays readable in
+the dataset and status message. Change the residential proxy country and retry — see
+[Troubleshooting](#troubleshooting).
 
 **Can I run this completely free?**
 On Apify, platform usage always applies (though the free plan covers small runs). For
